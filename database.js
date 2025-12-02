@@ -1,156 +1,146 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const { Pool } = require('pg');
 
-// Create database connection
-const dbPath = path.join(__dirname, 'funeral_home.db');
-const db = new sqlite3.Database(dbPath, (err) => {
+// Create PostgreSQL connection pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
+
+// Initialize database schema
+async function initializeDatabase() {
+  const createTableQuery = `
+    CREATE TABLE IF NOT EXISTS submissions (
+      id SERIAL PRIMARY KEY,
+      deceased_first_name VARCHAR(255) NOT NULL,
+      deceased_last_name VARCHAR(255) NOT NULL,
+      deceased_dob DATE NOT NULL,
+      deceased_dod DATE NOT NULL,
+      deceased_ssn VARCHAR(11),
+      service_type VARCHAR(100) NOT NULL,
+      service_date DATE,
+      service_time VARCHAR(10),
+      service_location VARCHAR(255),
+      burial_cremation VARCHAR(50),
+      contact_first_name VARCHAR(255) NOT NULL,
+      contact_last_name VARCHAR(255) NOT NULL,
+      contact_phone VARCHAR(20) NOT NULL,
+      contact_email VARCHAR(255) NOT NULL,
+      contact_address VARCHAR(255),
+      contact_city VARCHAR(100),
+      contact_state VARCHAR(2),
+      contact_zip VARCHAR(10),
+      contact_relationship VARCHAR(100) NOT NULL,
+      veteran_status VARCHAR(100),
+      religious_preference VARCHAR(100),
+      obituary_text TEXT,
+      additional_notes TEXT,
+      submission_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      status VARCHAR(50) DEFAULT 'pending'
+    )
+  `;
+
+  try {
+    await pool.query(createTableQuery);
+    console.log('Database table initialized successfully.');
+  } catch (err) {
+    console.error('Error creating table:', err.message);
+  }
+}
+
+// Test connection and initialize
+pool.connect((err, client, release) => {
   if (err) {
-    console.error('Error opening database:', err.message);
+    console.error('Error connecting to PostgreSQL database:', err.message);
   } else {
-    console.log('Connected to the SQLite database.');
+    console.log('Connected to PostgreSQL database.');
+    release();
     initializeDatabase();
   }
 });
 
-// Initialize database schema
-function initializeDatabase() {
-  const createTableQuery = `
-    CREATE TABLE IF NOT EXISTS submissions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      deceased_first_name TEXT NOT NULL,
-      deceased_last_name TEXT NOT NULL,
-      deceased_dob DATE NOT NULL,
-      deceased_dod DATE NOT NULL,
-      deceased_ssn TEXT,
-      service_type TEXT NOT NULL,
-      service_date DATE,
-      service_time TEXT,
-      service_location TEXT,
-      burial_cremation TEXT,
-      contact_first_name TEXT NOT NULL,
-      contact_last_name TEXT NOT NULL,
-      contact_phone TEXT NOT NULL,
-      contact_email TEXT NOT NULL,
-      contact_address TEXT,
-      contact_city TEXT,
-      contact_state TEXT,
-      contact_zip TEXT,
-      contact_relationship TEXT NOT NULL,
-      veteran_status TEXT,
-      religious_preference TEXT,
-      obituary_text TEXT,
-      additional_notes TEXT,
-      submission_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-      status TEXT DEFAULT 'pending'
-    )
+// Insert new submission
+async function insertSubmission(data) {
+  const query = `
+    INSERT INTO submissions (
+      deceased_first_name, deceased_last_name, deceased_dob, deceased_dod, deceased_ssn,
+      service_type, service_date, service_time, service_location, burial_cremation,
+      contact_first_name, contact_last_name, contact_phone, contact_email,
+      contact_address, contact_city, contact_state, contact_zip, contact_relationship,
+      veteran_status, religious_preference, obituary_text, additional_notes
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+    RETURNING id
   `;
 
-  db.run(createTableQuery, (err) => {
-    if (err) {
-      console.error('Error creating table:', err.message);
-    } else {
-      console.log('Database table initialized successfully.');
-    }
-  });
-}
+  const values = [
+    data.deceased_first_name, data.deceased_last_name, data.deceased_dob,
+    data.deceased_dod, data.deceased_ssn,
+    data.service_type, data.service_date, data.service_time,
+    data.service_location, data.burial_cremation,
+    data.contact_first_name, data.contact_last_name, data.contact_phone,
+    data.contact_email, data.contact_address, data.contact_city,
+    data.contact_state, data.contact_zip, data.contact_relationship,
+    data.veteran_status, data.religious_preference, data.obituary_text,
+    data.additional_notes
+  ];
 
-// Insert new submission
-function insertSubmission(data) {
-  return new Promise((resolve, reject) => {
-    const query = `
-      INSERT INTO submissions (
-        deceased_first_name, deceased_last_name, deceased_dob, deceased_dod, deceased_ssn,
-        service_type, service_date, service_time, service_location, burial_cremation,
-        contact_first_name, contact_last_name, contact_phone, contact_email,
-        contact_address, contact_city, contact_state, contact_zip, contact_relationship,
-        veteran_status, religious_preference, obituary_text, additional_notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    const params = [
-      data.deceased_first_name, data.deceased_last_name, data.deceased_dob, 
-      data.deceased_dod, data.deceased_ssn,
-      data.service_type, data.service_date, data.service_time, 
-      data.service_location, data.burial_cremation,
-      data.contact_first_name, data.contact_last_name, data.contact_phone, 
-      data.contact_email, data.contact_address, data.contact_city, 
-      data.contact_state, data.contact_zip, data.contact_relationship,
-      data.veteran_status, data.religious_preference, data.obituary_text, 
-      data.additional_notes
-    ];
-
-    db.run(query, params, function(err) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve({ id: this.lastID, message: 'Submission saved successfully' });
-      }
-    });
-  });
+  try {
+    const result = await pool.query(query, values);
+    return { id: result.rows[0].id, message: 'Submission saved successfully' };
+  } catch (err) {
+    throw err;
+  }
 }
 
 // Get all submissions
-function getAllSubmissions() {
-  return new Promise((resolve, reject) => {
-    const query = 'SELECT * FROM submissions ORDER BY submission_date DESC';
-    
-    db.all(query, [], (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(rows);
-      }
-    });
-  });
+async function getAllSubmissions() {
+  const query = 'SELECT * FROM submissions ORDER BY submission_date DESC';
+
+  try {
+    const result = await pool.query(query);
+    return result.rows;
+  } catch (err) {
+    throw err;
+  }
 }
 
 // Get submission by ID
-function getSubmissionById(id) {
-  return new Promise((resolve, reject) => {
-    const query = 'SELECT * FROM submissions WHERE id = ?';
-    
-    db.get(query, [id], (err, row) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(row);
-      }
-    });
-  });
+async function getSubmissionById(id) {
+  const query = 'SELECT * FROM submissions WHERE id = $1';
+
+  try {
+    const result = await pool.query(query, [id]);
+    return result.rows[0];
+  } catch (err) {
+    throw err;
+  }
 }
 
 // Update submission status
-function updateSubmissionStatus(id, status) {
-  return new Promise((resolve, reject) => {
-    const query = 'UPDATE submissions SET status = ? WHERE id = ?';
-    
-    db.run(query, [status, id], function(err) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve({ message: 'Status updated successfully', changes: this.changes });
-      }
-    });
-  });
+async function updateSubmissionStatus(id, status) {
+  const query = 'UPDATE submissions SET status = $1 WHERE id = $2';
+
+  try {
+    const result = await pool.query(query, [status, id]);
+    return { message: 'Status updated successfully', changes: result.rowCount };
+  } catch (err) {
+    throw err;
+  }
 }
 
 // Delete submission
-function deleteSubmission(id) {
-  return new Promise((resolve, reject) => {
-    const query = 'DELETE FROM submissions WHERE id = ?';
-    
-    db.run(query, [id], function(err) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve({ message: 'Submission deleted successfully', changes: this.changes });
-      }
-    });
-  });
+async function deleteSubmission(id) {
+  const query = 'DELETE FROM submissions WHERE id = $1';
+
+  try {
+    const result = await pool.query(query, [id]);
+    return { message: 'Submission deleted successfully', changes: result.rowCount };
+  } catch (err) {
+    throw err;
+  }
 }
 
 module.exports = {
-  db,
+  pool,
   insertSubmission,
   getAllSubmissions,
   getSubmissionById,

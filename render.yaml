@@ -1,3 +1,9 @@
+databases:
+  - name: funeral-home-db
+    databaseName: funeral_home
+    user: funeral_home_user
+    plan: free
+
 services:
   - type: web
     name: funeral-home-app
@@ -5,3 +11,10 @@ services:
     plan: free
     buildCommand: npm install
     startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: funeral-home-db
+          property: connectionString
+      - key: NODE_ENV
+        value: production

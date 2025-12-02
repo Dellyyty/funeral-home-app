@@ -44,9 +44,9 @@ An enterprise-grade, full-stack web application for managing funeral home servic
   - DELETE `/api/responses/:id` - Delete submission
   
 - **Database**
-  - SQLite database (no external setup required)
+  - PostgreSQL database (free tier on Render)
   - Automatic schema initialization
-  - Persistent data storage
+  - Persistent data storage (never resets!)
 
 ## 🚀 Quick Start
 
