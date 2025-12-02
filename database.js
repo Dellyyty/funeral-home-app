@@ -71,16 +71,31 @@ async function insertSubmission(data) {
     RETURNING id
   `;
 
+  // Convert empty strings to null for optional fields
   const values = [
-    data.deceased_first_name, data.deceased_last_name, data.deceased_dob,
-    data.deceased_dod, data.deceased_ssn,
-    data.service_type, data.service_date, data.service_time,
-    data.service_location, data.burial_cremation,
-    data.contact_first_name, data.contact_last_name, data.contact_phone,
-    data.contact_email, data.contact_address, data.contact_city,
-    data.contact_state, data.contact_zip, data.contact_relationship,
-    data.veteran_status, data.religious_preference, data.obituary_text,
-    data.additional_notes
+    data.deceased_first_name, 
+    data.deceased_last_name, 
+    data.deceased_dob,
+    data.deceased_dod, 
+    data.deceased_ssn || null,
+    data.service_type, 
+    data.service_date || null,  // Convert empty string to null
+    data.service_time || null,
+    data.service_location || null, 
+    data.burial_cremation,
+    data.contact_first_name, 
+    data.contact_last_name, 
+    data.contact_phone,
+    data.contact_email, 
+    data.contact_address || null, 
+    data.contact_city || null,
+    data.contact_state || null, 
+    data.contact_zip || null, 
+    data.contact_relationship,
+    data.veteran_status || null, 
+    data.religious_preference || null, 
+    data.obituary_text || null,
+    data.additional_notes || null
   ];
 
   try {
